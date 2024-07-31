@@ -51,7 +51,7 @@ const user = await User.create({
   password,
   userName: userName.toLowerCase(),
 });
-const createdUser = await User.findById(user._id).select(
+const createdUser = await   User.findById(user._id).select(
   "-password -refreshToken"
 ); //In this select method eveyone is by default but only a signle
 if (!createdUser) {
