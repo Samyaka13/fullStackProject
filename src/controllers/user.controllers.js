@@ -13,6 +13,7 @@ const registerUser = asyncHandler(async (req, res) => {
   //check for user creation
   //return response
   const { fullName, email, userName, password } = req.body;
+  console.log(req.body);
   console.log("email:", email);
   // if(fullName === ""){
   //   throw new ApiError(400,"fullName is required")
@@ -24,7 +25,7 @@ const registerUser = asyncHandler(async (req, res) => {
   ) {
     throw new ApiError(404, "All fields are required");
   }
-  const existedUser = User.findOne({
+  const existedUser = await User.findOne({
     $or: [{ userName }, { email }],
   });
   if (existedUser) {
@@ -34,8 +35,13 @@ const registerUser = asyncHandler(async (req, res) => {
   //req.body => int this body was given by express and here req.file file is given by multer
   // optinallly chainning the fields given by middleware is a goood practice that is why we used the question mark there
   const avatarLocalPath = req.files?.avatar[0]?.path;
-const coverImagePath = req.files?.coverImage[0]?.path;
-if (avatarLocalPath) {
+  // **************************console.log(req.files)
+// const coverImagePath = req.files?.coverImage[0]?.path;
+let coverImagePath ;
+if(req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length>0){
+  coverImagePath = req.files.coverImage[0].path
+}
+if (!avatarLocalPath) {
   throw new ApiError(404, "Avatar file is required");
 }
 const avatar = await uploadOnCloudinary(avatarLocalPath);
