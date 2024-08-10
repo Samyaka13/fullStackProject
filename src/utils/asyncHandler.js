@@ -15,6 +15,20 @@ export { asyncHandler };
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ////////////////////or we can do this 
 // const asyncHandler =  (fn)=> async (req,res,next) =>{
 //     try{

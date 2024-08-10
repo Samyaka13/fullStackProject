@@ -3,6 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponses.js";
+import jwt from "jsonwebtoken";
 const registerUser = asyncHandler(async (req, res) => {
   //Get user details from frontend ()
   //validation - not empty
@@ -36,35 +37,167 @@ const registerUser = asyncHandler(async (req, res) => {
   // optinallly chainning the fields given by middleware is a goood practice that is why we used the question mark there
   const avatarLocalPath = req.files?.avatar[0]?.path;
   // **************************console.log(req.files)
-// const coverImagePath = req.files?.coverImage[0]?.path;
-let coverImagePath ;
-if(req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length>0){
-  coverImagePath = req.files.coverImage[0].path
-}
-if (!avatarLocalPath) {
-  throw new ApiError(404, "Avatar file is required");
-}
-const avatar = await uploadOnCloudinary(avatarLocalPath);
-const coverImage = await uploadOnCloudinary(coverImagePath);
-if (!avatar) {
-  throw new ApiError(404, "Avatar file is required");
-}
-const user = await User.create({
-  fullName,
-  avatar: avatar.url,
-  coverImage: coverImage?.url || "",
-  email,
-  password,
-  userName: userName.toLowerCase(),
+  // const coverImagePath = req.files?.coverImage[0]?.path;
+  let coverImagePath;
+  if (
+    req.files &&
+    Array.isArray(req.files.coverImage) &&
+    req.files.coverImage.length > 0
+  ) {
+    coverImagePath = req.files.coverImage[0].path;
+  }
+  if (!avatarLocalPath) {
+    throw new ApiError(404, "Avatar file is required");
+  }
+  const avatar = await uploadOnCloudinary(avatarLocalPath);
+  const coverImage = await uploadOnCloudinary(coverImagePath);
+  if (!avatar) {
+    throw new ApiError(404, "Avatar file is required");
+  }
+  const user = await User.create({
+    fullName,
+    avatar: avatar.url,
+    coverImage: coverImage?.url || "",
+    email,
+    password,
+    userName: userName.toLowerCase(),
+  });
+  const createdUser = await User.findById(user._id).select(
+    "-password -refreshToken"
+  ); //In this select method eveyone is by default but only a signle
+  if (!createdUser) {
+    throw new ApiError(505, "Something went wrong while registering the user");
+  }
+  return res
+    .status(201)
+    .json(new ApiResponse(200, createdUser, "User registered succesfully"));
 });
-const createdUser = await   User.findById(user._id).select(
-  "-password -refreshToken"
-); //In this select method eveyone is by default but only a signle
-if (!createdUser) {
-  throw new ApiError(505, "Something went wrong while registering the user");
-}
-return res.status(201).json(
-  new ApiResponse(200,createdUser,"User registered succesfully")
-)
+const generateAccessTokenAndRefreshToken = async (userId) => {
+  try {
+    const user = await User.findById(userId);
+    const accessToken = user.generateAccessToken();
+    const refreshToken = user.generateRefreshToken();
+    user.refreshToken = refreshToken;
+    await user.save({ validateBeforeSave: false }); /// All these are MONGODB methods
+    return { accessToken, refreshToken };
+  } catch (error) {
+    throw new ApiError(
+      500,
+      "Something went wrong while generating refresh and access token "
+    );
+  }
+};
+const loginUser = asyncHandler(async (req, res) => {
+  //req body -> data
+  //username or email
+  //find the user
+  //password check
+  //generate access and refresh token
+  //send these tokens in cookies
+
+  const { email, userName, password } = req.body;
+  if (!(email || userName)) {
+    throw new ApiError(400, "userName or email is requried");
+  }
+  const user = await User.findOne({
+    $or: [{ userName }, { email }],
+  });
+  if (!user) {
+    throw new ApiError(404, "User does not exist");
+  }
+  const isPasswordCorrect = await user.isPasswordCorrect(password);
+  //capital User should not be used it is of moongose and small user is the user instance that we took from the database
+  if (!isPasswordCorrect) {
+    throw new ApiError(401, "Invalid user credentials");
+  }
+  const { accessToken, refreshToken } =
+    await generateAccessTokenAndRefreshToken(user._id);
+
+  const loggedInUser = await User.findById(user._id).select(
+    "-password -refreshToken"
+  );
+  //now cookies
+  const options = {
+    //we are defining these options beacuse the cookies are generally modifiable by default so it can be changed from frontend also but when we define the following two options then  the cookies are not modfiable
+    httpOnly: true,
+    secure: true,
+  };
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(
+      new ApiResponse(
+        200,
+        {
+          user: loggedInUser,
+          accessToken,
+          refreshToken,
+        },
+        "User logged in successfully "
+      )
+    );
 });
-export { registerUser };
+const logOutUser = asyncHandler(async (req, res) => {
+  //req.user._id   //we got this user because of the middleware we are using
+  await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $set: {
+        refreshToken: undefined,
+      },
+    },
+    {
+      new: true, //this tells me that it will return us the new value instead of old one
+    }
+  );
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+  return res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(new ApiResponse(200, {}, "User Logged Out successfully"));
+});
+const refreshAccessToken = asyncHandler(async (req, res) => {
+  const incomingRefreshToken =
+    req.cookies.refreshAccessToken || req.body.refreshToken;
+  if (!incomingRefreshToken) {
+    throw new ApiError(404, "Unauthorized request");
+  }
+  try {
+    const decodedToken = jwt.verify(
+      incomingRefreshToken,
+      process.env.REFRESH_TOKEN_SECRET
+    );
+    const user = await User.findById(decodedToken?._id);
+    if (!user) {
+      throw new ApiError(401, "Invalid refresh token");
+    }
+    if (incomingRefreshToken !== user?.refreshToken) {
+      throw new ApiError(401, "Refresh token is expired or used");
+    }
+    const options = {
+      httpOnly: true,
+      secure: true,
+    };
+    const { accessToken, newRefreshToken } =
+      await generateAccessTokenAndRefreshToken(user._id);
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", newRefreshToken, options)
+      .json(
+        new ApiResponse(
+          200,
+          { accessToken, refreshToken: newRefreshToken },
+          "Access token refreshed"
+        )
+      );
+  } catch (error) {
+    throw new ApiError(401, error?.message || "Invalid refresh token");
+  }
+});
+export { registerUser, loginUser, logOutUser, refreshAccessToken };

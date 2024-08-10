@@ -62,7 +62,7 @@ userSchema.methods.isPasswordCorrect = async function (password)
     email:this.email,
     fullName:this.fullName
   },
-process.env.ACACCESS_TOKEN_SECRET,
+process.env.ACCESS_TOKEN_SECRET,
 {
   expiresIn : process.env.ACCESS_TOKEN_EXPIRY
 } 
@@ -74,8 +74,10 @@ userSchema.methods.generateRefreshToken = function(){
     },
     process.env.REFRESH_TOKEN_SECRET,
     {
-      expiresIn: REFRESH_TOKEN_EXPIRY
+      expiresIn:  process.env.REFRESH_TOKEN_EXPIRY
     }
   )
 }
 export const User = mongoose.model("User", userSchema);
+///EVerything about refresh token and access token is written here
+//Refresh token is saved in dataBase already 
