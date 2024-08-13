@@ -361,7 +361,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(200, channel[0], "User channel fetched succesfully");
+    .json(new ApiResponse(200, channel[0], "User channel fetched succesfully"));
 });
 const getWatchHistory = asyncHandler(async (req, res) => {
   //********req.user_id this statment gives you entire string not just the ID but what User.findByID method automatically converts that string to ID******
@@ -373,14 +373,51 @@ const getWatchHistory = asyncHandler(async (req, res) => {
       },
     },
     {
-      $lookup:{
+      $lookup: {
         from: "videos",
         localField: "watchHistory",
-        foreignField:"_id",
-        as:"watchHistory"
-      }
+        foreignField: "_id",
+        as: "watchHistory",
+        pipeline: [
+          {
+            $lookup: {
+              from: "users",
+              localField: "owner",
+              foreignField: "_id",
+              as: "owner", //using pipeline again after this beacause I don't want to show all the data I only want selected fields in my video model from my User model
+              pipeline: [
+                {
+                  $project: {
+                    fullName: 1,
+                    userName: 1,
+                    avatar: 1,
+                  },
+                },
+              ],
+            },
+          },
+          {
+            //using this pipeline to order the data that we are populating in the owner field
+            $addFields: {
+              owner: {
+                //overwriting it
+                $first: "$owner", //through this we are giving the frontend an object of owner that will help him to get all the values using owner.
+              },
+            },
+          },
+        ],
+      },
     },
   ]);
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        user[0].watchHistory,
+        "watch history fetched successfully"
+      )
+    );
 });
 export {
   registerUser,
@@ -393,4 +430,5 @@ export {
   updateUserAvatar,
   updateUserCoverImage,
   getUserChannelProfile,
+  getWatchHistory,
 };
