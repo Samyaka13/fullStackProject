@@ -1,9 +1,16 @@
 import { Router } from "express";
 import {
+  changeCurrentPassword,
+  getCurrentUser,
+  getUserChannelProfile,
+  getWatchHistory,
   loginUser,
   logOutUser,
   refreshAccessToken,
   registerUser,
+  updateAccountDetails,
+  updateUserAvatar,
+  updateUserCoverImage,
 } from "../controllers/user.controllers.js";
 import { upload } from "../middlewarers/multer.middlewar.js";
 import { verifyJWT } from "../middlewarers/auth.middleware.js";
@@ -26,4 +33,15 @@ router.route("/login").post(loginUser);
 //secured routes
 router.route("/logout").post(verifyJWT, /* oneMoreMiddleware, */ logOutUser); // the next() method used tells that now the next method should be running that is why we use next in the code of middleware
 router.route("/refresh-token").post(refreshAccessToken);
+router.route("/change-password").post(verifyJWT, changeCurrentPassword);
+router.route("/current-user").get(verifyJWT, getCurrentUser);
+router.route("/update-account").patch(verifyJWT, updateAccountDetails);
+router
+  .route("/avatar")
+  .patch(verifyJWT, upload.single("avatar"), updateUserAvatar);
+router
+  .route("/cover-image")
+  .patch(verifyJWT, upload.single("coverImage"), updateUserCoverImage);
+router.route("/c/:username").get(verifyJWT, getUserChannelProfile); //here we are getting from params
+router.route("/history").get(verifyJWT, getWatchHistory);
 export default router;
