@@ -1,9 +1,13 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
-import { deleteFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
+import {
+  deleteFromCloudinary,
+  uploadOnCloudinary,
+} from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponses.js";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 const registerUser = asyncHandler(async (req, res) => {
   //Get user details from frontend ()
   //validation - not empty
@@ -249,7 +253,7 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
   }
   const currentUser = await User.findById(req.user?._id);
   const oldAvatar = currentUser.avatar;
- 
+
   const user = await User.findByIdAndUpdate(
     req.user?._id,
     {
@@ -259,8 +263,8 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     },
     { new: true }
   ).select("-password");
-  if(oldAvatar){
-    await deleteFromCloudinary(oldAvatar)
+  if (oldAvatar) {
+    await deleteFromCloudinary(oldAvatar);
   }
   return res
     .status(200)
@@ -288,6 +292,96 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, user, "Cover Image updated succesfully"));
 });
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+  const { userName } = req.params; // params is extracting from URL
+  if (!userName?.trim()) {
+    throw new ApiError(400, "User name is missing");
+  }
+  // User.find({userName})
+  // it is checking for the above userName is present in the documents it is shortHand for userName: userName **** well instead of doing this we can directly apply aggregation pipeline
+  // ************************** //
+  //User.aggregate([{first pipeline},{second pipeline}]) the value we get after using aggregate pipelines that is in arrays
+  const channel = await User.aggregate([
+    {
+      $match: {
+        userName: userName?.toLowerCase(), //In this line of code we have selected a document based on the userName
+      },
+    },
+    {
+      $lookup: {
+        from: "subscriptions", //It should be "Subscription" but acc to MongoDb's nomenclature it became "subscriptions"  all in small and plural
+        localField: "_id",
+        foreignField: "channel",
+        as: "subscribers", //here all the documents are collected
+      },
+    },
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "subscriber",
+        as: "subscribedTo", //here all the documents are collected
+      },
+    },
+    {
+      $addFields: {
+        subscribersCount: {
+          $size: "$subscribers",
+        },
+        channelsSubscribedToCount: {
+          $size: "$subscribedTo",
+        },
+        isSubscribed: {
+          $cond: {
+            if: { $in: [req.user?._id, "$subscribers.subscriber"] }, //It will be showing that if the user have subscribed to a particular channel or not
+            then: true,
+            else: false,
+          },
+        },
+      },
+    },
+    {
+      $project: {
+        //This helps us to show only selected values no other values
+        fullName: 1,
+        userName: 1,
+        subscribersCount: 1,
+        channelsSubscribedToCount: 1,
+        isSubscribed: 1,
+        coverImage: 1,
+        avatar: 1,
+        email: 1,
+      },
+    },
+  ]);
+  if (!channel?.length) {
+    throw new ApiError(404, "Channel does not exists");
+  }
+  console.log(channel);
+
+  return res
+    .status(200)
+    .json(200, channel[0], "User channel fetched succesfully");
+});
+const getWatchHistory = asyncHandler(async (req, res) => {
+  //********req.user_id this statment gives you entire string not just the ID but what User.findByID method automatically converts that string to ID******
+  //******We can convert this string to ID if we are not using Moongose*********/
+  const user = await User.aggregate([
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(req.user._id),
+      },
+    },
+    {
+      $lookup:{
+        from: "videos",
+        localField: "watchHistory",
+        foreignField:"_id",
+        as:"watchHistory"
+      }
+    },
+  ]);
+});
 export {
   registerUser,
   loginUser,
@@ -298,4 +392,5 @@ export {
   updateAccountDetails,
   updateUserAvatar,
   updateUserCoverImage,
+  getUserChannelProfile,
 };
