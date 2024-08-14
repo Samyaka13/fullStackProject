@@ -265,6 +265,8 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
   ).select("-password");
   if (oldAvatar) {
     await deleteFromCloudinary(oldAvatar);
+  }else{
+    throw new ApiError(404,"Cannot find the old Avatar file");
   }
   return res
     .status(200)
