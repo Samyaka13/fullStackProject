@@ -76,32 +76,91 @@ const registerUser = asyncHandler(async (req, res) => {
     .status(201)
     .json(new ApiResponse(200, createdUser, "User registered succesfully"));
 });
+// const generateAccessTokenAndRefreshToken = async (userId) => {
+//   try {
+//     const user = await User.findById(userId);
+//     const accessToken = user.generateAccessToken();
+//     const refreshToken = user.generateRefreshToken();
+//     user.refreshToken = refreshToken;
+//     await user.save({ validateBeforeSave: false }); /// All these are MONGODB methods
+//     return { accessToken, refreshToken };
+//   } catch (error) {
+//     throw new ApiError(
+//       500,
+//       "Something went wrong while generating refresh and access token "
+//     );
+//   }
+// };
 const generateAccessTokenAndRefreshToken = async (userId) => {
   try {
     const user = await User.findById(userId);
     const accessToken = user.generateAccessToken();
     const refreshToken = user.generateRefreshToken();
     user.refreshToken = refreshToken;
-    await user.save({ validateBeforeSave: false }); /// All these are MONGODB methods
+    await user.save({ validateBeforeSave: false });
     return { accessToken, refreshToken };
   } catch (error) {
     throw new ApiError(
       500,
-      "Something went wrong while generating refresh and access token "
+      "Something went wrong while generating access and refresh token"
     );
   }
 };
-const loginUser = asyncHandler(async (req, res) => {
-  //req body -> data
-  //username or email
-  //find the user
-  //password check
-  //generate access and refresh token
-  //send these tokens in cookies
+// const loginUser = asyncHandler(async (req, res) => {
+//   //req body -> data
+//   //username or email
+//   //find the user
+//   //password check
+//   //generate access and refresh token
+//   //send these tokens in cookies
 
+//   const { email, userName, password } = req.body;
+//   if (!(email || userName)) {
+//     throw new ApiError(400, "userName or email is requried");
+//   }
+//   const user = await User.findOne({
+//     $or: [{ userName }, { email }],
+//   });
+//   if (!user) {
+//     throw new ApiError(404, "User does not exist");
+//   }
+//   const isPasswordCorrect = await user.isPasswordCorrect(password);
+//   //capital User should not be used it is of moongose and small user is the user instance that we took from the database
+//   if (!isPasswordCorrect) {
+//     throw new ApiError(401, "Invalid user credentials");
+//   }
+//   const { accessToken, refreshToken } =
+//     await generateAccessTokenAndRefreshToken(user._id);
+
+//   const loggedInUser = await User.findById(user._id).select(
+//     "-password -refreshToken"
+//   );
+//   //now cookies
+//   const options = {
+//     //we are defining these options beacuse the cookies are generally modifiable by default so it can be changed from frontend also but when we define the following two options then  the cookies are not modfiable
+//     httpOnly: true,
+//     secure: true,
+//   };
+//   return res
+//     .status(200)
+//     .cookie("accessToken", accessToken, options)
+//     .cookie("refreshToken", refreshToken, options)
+//     .json(
+//       new ApiResponse(
+//         200,
+//         {
+//           user: loggedInUser,
+//           accessToken,
+//           refreshToken,
+//         },
+//         "User logged in successfully "
+//       )
+//     );
+// });
+const loginUser = asyncHandler(async (req, res) => {
   const { email, userName, password } = req.body;
   if (!(email || userName)) {
-    throw new ApiError(400, "userName or email is requried");
+    throw new ApiError(400, "UserName or email is requried");
   }
   const user = await User.findOne({
     $or: [{ userName }, { email }],
@@ -110,19 +169,15 @@ const loginUser = asyncHandler(async (req, res) => {
     throw new ApiError(404, "User does not exist");
   }
   const isPasswordCorrect = await user.isPasswordCorrect(password);
-  //capital User should not be used it is of moongose and small user is the user instance that we took from the database
   if (!isPasswordCorrect) {
-    throw new ApiError(401, "Invalid user credentials");
+    throw new ApiError(404, "Give the correct password");
   }
   const { accessToken, refreshToken } =
     await generateAccessTokenAndRefreshToken(user._id);
-
   const loggedInUser = await User.findById(user._id).select(
     "-password -refreshToken"
   );
-  //now cookies
   const options = {
-    //we are defining these options beacuse the cookies are generally modifiable by default so it can be changed from frontend also but when we define the following two options then  the cookies are not modfiable
     httpOnly: true,
     secure: true,
   };
@@ -138,13 +193,36 @@ const loginUser = asyncHandler(async (req, res) => {
           accessToken,
           refreshToken,
         },
-        "User logged in successfully "
+        "User logged in successfully"
       )
     );
 });
+
+// const logOutUser = asyncHandler(async (req, res) => {
+//   //req.user._id   //we got this user because of the middleware we are using
+//   await User.findByIdAndUpdate(
+//     req.user._id,
+//     {
+//       $set: {
+//         refreshToken: undefined,
+//       },
+//     },
+//     {
+//       new: true, //this tells me that it will return us the new value instead of old one
+//     }
+//   );
+//   const options = {
+//     httpOnly: true,
+//     secure: true,
+//   };
+//   return res
+//     .status(200)
+//     .clearCookie("accessToken", options)
+//     .clearCookie("refreshToken", options)
+//     .json(new ApiResponse(200, {}, "User Logged Out successfully"));
+// });
 const logOutUser = asyncHandler(async (req, res) => {
-  //req.user._id   //we got this user because of the middleware we are using
-  await User.findByIdAndUpdate(
+  User.findByIdAndUpdate(
     req.user._id,
     {
       $set: {
@@ -152,7 +230,7 @@ const logOutUser = asyncHandler(async (req, res) => {
       },
     },
     {
-      new: true, //this tells me that it will return us the new value instead of old one
+      new: true,
     }
   );
   const options = {
@@ -163,7 +241,7 @@ const logOutUser = asyncHandler(async (req, res) => {
     .status(200)
     .clearCookie("accessToken", options)
     .clearCookie("refreshToken", options)
-    .json(new ApiResponse(200, {}, "User Logged Out successfully"));
+    .json(new ApiResponse(200, {}, "User logged out successfully"));
 });
 const refreshAccessToken = asyncHandler(async (req, res) => {
   const incomingRefreshToken =

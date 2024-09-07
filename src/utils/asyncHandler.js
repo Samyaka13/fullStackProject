@@ -1,35 +1,17 @@
+// const asyncHandler = (requestHandler) => {
+//   return (req, res, next) => {
+//     Promise.resolve(requestHandler(req, res, next)).catch((err) => next(err));
+//   };
+// };
+// export { asyncHandler };
 const asyncHandler = (requestHandler) => {
-    return (req,res,next)=>{
-        Promise.resolve(requestHandler(req,res,next)).catch((err)=> next(err));
-    }
-};
-export { asyncHandler };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-////////////////////or we can do this 
+    return (req, res, next) => {
+      Promise.resolve(requestHandler(req, res, next)).catch((err) => next(err));
+    };
+  };
+  export { asyncHandler };
+  
+////////////////////or we can do this
 // const asyncHandler =  (fn)=> async (req,res,next) =>{
 //     try{
 //         await fn(req,res,next)
@@ -40,9 +22,5 @@ export { asyncHandler };
 //         })
 //     }
 // } //What is this is explained below
-
-
-
-
 
 // const explain = (func) => {()=>{}}  Explaination
